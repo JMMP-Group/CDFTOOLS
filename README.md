@@ -4,9 +4,9 @@
 ## Using CDFTOOLS
 
 #### Cloning the git repository
-To retrieve a copy of the CDFTOOLS source code and create a working directory, run the following on the command line: 
+To retrieve a local copy of the CDFTOOLS `dev_jmmp` development branch run the following on the command line: 
 
-```> git clone https://github.com/meom-group/CDFTOOLS ```
+```> git clone -b dev_jmmp --single-branch https://github.com/JMMP-Group/CDFTOOLS.git CDFTOOLS_jmmp```
 
 #### Compiling CDFTOOLS
 All the fortran source are in src/ subdirectory. In src/ there is a Makefile for compiling the sources. The compiler/machines related definitions are supposed to be collected in a `make.macro` file. Some examples of `make.macro` are given in the Macrolib directory and can be used as template for a new compiler or new machine. Then the good practice is to make a link 
