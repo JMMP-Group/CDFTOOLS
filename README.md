@@ -1,11 +1,9 @@
 # CDFTOOLS - JMMP development branch
    This is the main development branch of the JMMP FORK of [CDFTOOLS](https://github.com/meom-group/CDFTOOLS), a diagnostic package written in fortran 90 for the analysis of NEMO model output, initialized in the frame of the DRAKKAR project (<https://www.drakkar-ocean.eu/>). The main repository of CDFTOOLS is available on GitHub (<https://github.com/meom-group/CDFTOOLS>) under the CeCILL license (<http://www.cecill.info/licences/Licence_CeCILL_V2-en.html>). The current supported version of CDFTOOLS is version 4.
  
-## Using the JMMP development branch of CDFTOOLS
+## Using CDFTOOLS
 
-The following are instructions specific for using the JMMP development branch of CDFTOOLS in the main computational resources of the UK used for numerical ocean modelling (e.g., Met Office HPC, NOC, ARCHER, JASMIN ...). These instructions closely follow the more general instructions provided on the main repository of CDFTOOLS (<https://github.com/meom-group/CDFTOOLS>).
-
-#### Cloning the git repository
+#### Cloning the git JMMP development branch
 To retrieve a local copy of the CDFTOOLS `dev_jmmp` development branch run the following on the command line: 
 
 ```> git clone -b dev_jmmp --single-branch https://github.com/JMMP-Group/CDFTOOLS.git CDFTOOLS_jmmp```
