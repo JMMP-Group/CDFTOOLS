@@ -1,8 +1,6 @@
-# CDFTOOLS - JMMP fork
-  CDFTOOLS is a diagnostic package written in fortran 90 for the analysis of NEMO model output, initialized in  the frame of the DRAKKAR project (<https://www.drakkar-ocean.eu/>). It is now available on GitHub under the CeCILL license (<http://www.cecill.info/licences/Licence_CeCILL_V2-en.html>).
-
-  This is the main development branch of the JMMP FORK of the [main repository of CDFTOOLS](https://github.com/meom-group/CDFTOOLS). The actual version of CDFTOOLS is known as version 4.
-
+# CDFTOOLS - JMMP development branch
+   This is the main development branch of the JMMP FORK of [CDFTOOLS](https://github.com/meom-group/CDFTOOLS), a diagnostic package written in fortran 90 for the analysis of NEMO model output, initialized in the frame of the DRAKKAR project (<https://www.drakkar-ocean.eu/>). The main repository is available on GitHub (<https://github.com/meom-group/CDFTOOLS>) under the CeCILL license (<http://www.cecill.info/licences/Licence_CeCILL_V2-en.html>). The current supported version of CDFTOOLS is version 4.
+ 
 ## Using CDFTOOLS
 
 #### Cloning the git repository
