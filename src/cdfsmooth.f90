@@ -17,15 +17,9 @@ PROGRAM cdfsmooth
   !!           3.0  : 01/2011  : J.M. Molines : Doctor norm + Lic.
   !!           3.0  : 07/2011  : R. Dussin    : Add anisotropic box 
   !!         : 4.0  : 03/2017  : J.M. Molines  
+  !!                     2024  : M.J. Bell    : Shapiro filter routine rewritten
   !!----------------------------------------------------------------------
-  !!                  ***  ROUTINE lisshapiro2d  ***   Mike Bell 17 Aug 2021
-  !!
-  !! ** Purpose :  apply a korder 2D shapiro filter kpass times. The land/sea mask and values at 
-  !!               The land/sea mask and values at selected points may be forced iteratively toward their initial values.     
-  !!
-  !!
-  !!----------------------------------------------------------------------
-  !!   routines      : description
+   !!   routines      : description
   !!  filterinit   : initialise weight
   !!  filter       : main routine for filter computation
   !!  initlanc     : initialise lanczos weights
