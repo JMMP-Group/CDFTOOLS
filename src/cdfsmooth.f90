@@ -85,15 +85,14 @@ PROGRAM cdfsmooth
   TYPE (variable), DIMENSION(:),    ALLOCATABLE :: stypvar           ! struture for attribute
 
   CHARACTER(LEN=256), DIMENSION(:), ALLOCATABLE :: cv_names          ! array of var name
-  CHARACTER(LEN=256)                            :: cf_in, cf_out     ! file names
-  CHARACTER(LEN=256)                            :: cf_in_stem, cf_suffix ! file name parts
+  CHARACTER(LEN=256)                            :: cf_in, cf_out, cf_nam   ! file names
+  CHARACTER(LEN=256)                            :: cf_in_stem, cf_suffix   ! file name parts
   CHARACTER(LEN=256)                            :: cv_dep, cv_tim    ! variable name for depth and time
   CHARACTER(LEN=256)                            :: ctyp              ! filter type
   CHARACTER(LEN=256)                            :: cldum             ! dummy character variable
   CHARACTER(LEN=256)                            :: clklist           ! ciphered k-list of level
 
   LOGICAL                                       :: lnc4 = .FALSE.    ! flag for netcdf4 output with chinking and deflation
-  INTEGER(KIND=4)                               :: ji, jj, jmx, jkx !  dummy loop index
 
   !!----------------------------------------------------------------------
   CALL ReadCdfNames()
@@ -114,6 +113,7 @@ PROGRAM cdfsmooth
      PRINT *,'                    of iteration of the Shapiro filter.'
      PRINT *,'      '
      PRINT *,'     OPTIONS :'
+     PRINT *,'       [-n NAM-file] : namelist file. Only required for Shapiro filter.'
      PRINT *,'       [-t FLT-type] : Lanczos      , L, l  (default)'
      PRINT *,'                       Hanning      , H, h'
      PRINT *,'                       Shapiro      , S, s'
@@ -138,6 +138,7 @@ PROGRAM cdfsmooth
      STOP 
   ENDIF
   !
+  cf_nam = ""
   ijarg = 1
   ilev  = 0
   ranis = 1   ! anisotropic ratio for Box car filter
@@ -150,6 +151,7 @@ PROGRAM cdfsmooth
      CALL getarg ( ijarg, cldum ) ; ijarg=ijarg+1
      SELECT CASE (cldum)
      CASE ( '-f'  ) ; CALL getarg ( ijarg, cf_in   ) ; ijarg=ijarg+1
+     CASE ( '-n'  ) ; CALL getarg ( ijarg, cf_nam  ) ; ijarg=ijarg+1
      CASE ( '-c'  ) ; CALL getarg ( ijarg, cldum   ) ; ijarg=ijarg+1 ; READ(cldum,*) ncut
      CASE ( '-t'  ) ; CALL getarg ( ijarg, ctyp    ) ; ijarg=ijarg+1 
      CASE ( '-npass') ; CALL getarg ( ijarg, cldum   ) ; ijarg=ijarg+1 ; READ(cldum,*) npass
@@ -604,7 +606,7 @@ CONTAINS
     LOGICAL                                      :: l_pass_shallow_updates  ! => update values where bathy < zmin_val between passes
     LOGICAL                                      :: l_pass_fixed_pt_updates ! => update values where bathymetry should remain fixed
 
-    REAL(KIND=4)                                 :: zmin_val, zfactor_shallow, ztol_fixed, ztol_shallow ! see below
+    REAL(KIND=4)                                 :: rmin_val, rfactor_shallow, rtol_fixed, rtol_shallow ! see below
 
     INTEGER (KIND=4)                             :: ji_single_pt, jj_single_pt ! indices of single point (see l_single_point_response)
     INTEGER(KIND=4)                              :: jst_prt, jend_prt ! 
@@ -614,23 +616,23 @@ CONTAINS
 !-----------------------------------------------------------------------------------------------
 
     NAMELIST / nam_shapiro / ll_npol_fold, ll_cycl, l_single_point_response, l_pass_shallow_updates, l_pass_fixed_pt_updates, &
-   &                         ji_single_pt, jj_single_pt, jst_prt, jend_prt 
+   &                         ji_single_pt, jj_single_pt, jst_prt, jend_prt, rmin_val, rtol_shallow, rtol_fixed, rfactor_shallow 
 !! Namelist default values 
     ll_npol_fold = .FALSE.
     ll_cycl = .FALSE. 
     l_single_point_response = .FALSE.
     l_pass_shallow_updates = .TRUE.
     l_pass_fixed_pt_updates = .TRUE.
-
-    zmin_val        =  -5  ! minimum depth (e.g. 10.0 metres) 
-    ztol_shallow    = 1.0    ! tolerance in metres of minimum shallow values (zmin_val - ztol_shallow) 
-    ztol_fixed      = 1.0    ! tolerance in metres for fit to bathymetry at point specified to be fixed  
-    zfactor_shallow = 1.5    ! zfactor_shallow needs to be slightly greater than 1.0   ! 1.1 to 1.5 are reasonable values
+    rmin_val        = 5.0    ! minimum depth (e.g. 10.0 metres) 
+    rtol_shallow    = 1.0    ! tolerance in metres of minimum shallow values (rmin_val - rtol_shallow) 
+    rtol_fixed      = 1.0    ! tolerance in metres for fit to bathymetry at point specified to be fixed  
+    rfactor_shallow = 1.5    ! rfactor_shallow needs to be slightly greater than 1.0   ! 1.1 to 1.5 are reasonable values
 
     ji_single_pt = 622 ; jj_single_pt = 779
     jst_prt = 400 ;      jend_prt = 405
 
-    OPEN(UNIT=20, file = 'namelist_shapiro.txt', form='formatted', status='old' )
+    IF( len(trim(cf_nam)) == 0 ) cf_nam='namelist_shapiro.txt'
+    OPEN(UNIT=20, file = trim(cf_nam), form='formatted', status='old' )
     READ(NML=nam_shapiro, UNIT = 20) 
     WRITE(NML=nam_shapiro, UNIT=6)
     CLOSE(20)
@@ -684,10 +686,10 @@ CONTAINS
     PRINT *, ' point 1 zkiw' 
     CALL prt_summary( zkiw, zones, kpi, kpj) 
 
-    IF ( zmin_val > 0.0 ) THEN 
+    IF ( rmin_val > 0.0 ) THEN 
        DO jj = 2, kpj-1
          DO ji = 2,kpi-1
-           IF ( zkiw(ji,jj) > 0.0 .AND. zpx(ji,jj) < zmin_val ) zpx(ji,jj) = zmin_val        
+           IF ( zkiw(ji,jj) > 0.0 .AND. zpx(ji,jj) < rmin_val ) zpx(ji,jj) = rmin_val        
          ENDDO
        ENDDO 
     ENDIF 
@@ -773,32 +775,34 @@ CONTAINS
 
        IF ( .NOT. ( l_pass_fixed_pt_updates .OR. l_pass_shallow_updates ) ) EXIT jiterationloop  
 
-! Find the number of points where the filtered bathymetry (zpy) is less than zmin_val (to within tolerance ztol_shallow)  
+! Find the number of points where the filtered bathymetry (zpy) is less than rmin_val (to within tolerance rtol_shallow)  
      
-       jcount_shallow = 0
-       rms_int = 0.0 
-       PRINT *, ' zpy(ji,jj), ji, jj, jcount where zpy < zmin_val - ztol_shallow'  
-       DO jj = 2, kpj-1
-          DO ji = 2,kpi-1
-             IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < zmin_val - ztol_shallow ) THEN  
-                jcount_shallow = jcount_shallow + 1
-	        IF ( jcount_shallow < 50 ) PRINT *, zpy(ji,jj), ji, jj, jcount_shallow 
-             ENDIF 
-             rms_int = rms_int + ( zpy(ji,jj) - px(ji,jj) )*( zpy(ji,jj) - px(ji,jj) ) 
+       IF ( l_pass_shallow_updates ) THEN 
+          jcount_shallow = 0
+          rms_int = 0.0 
+          PRINT *, ' zpy(ji,jj), ji, jj, jcount where zpy < rmin_val - rtol_shallow'  
+          DO jj = 2, kpj-1
+             DO ji = 2,kpi-1
+                IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rmin_val - rtol_shallow ) THEN  
+                   jcount_shallow = jcount_shallow + 1
+                   IF ( jcount_shallow < 50 ) PRINT *, zpy(ji,jj), ji, jj, jcount_shallow 
+                ENDIF
+                rms_int = rms_int + ( zpy(ji,jj) - px(ji,jj) )*( zpy(ji,jj) - px(ji,jj) ) 
+             ENDDO
           ENDDO
-       ENDDO 
-       znpts = (kpj-2)*(kpi-2)
-       rms_int = SQRT( rms_int / znpts ) 
-       PRINT *, 'jcount_shallow = ', jcount_shallow
-       PRINT *, 'rms_int = ', rms_int
+          znpts = (kpj-2)*(kpi-2)
+          rms_int = SQRT( rms_int / znpts ) 
+          PRINT *, 'jcount_shallow = ', jcount_shallow
+          PRINT *, 'rms_int = ', rms_int
+       ENDIF ! l_pass_shallow_updates
 
        IF ( l_pass_fixed_pt_updates ) THEN 
           jcount_fixed = 0 
-          PRINT *, ' px(ji,jj), zpy(ji,jj), ji, jj, jcount where ABS( zpy(ji,jj) - px(ji,jj) ) > ztol_fixed '  
+          PRINT *, ' px(ji,jj), zpy(ji,jj), ji, jj, jcount where ABS( zpy(ji,jj) - px(ji,jj) ) > rtol_fixed '  
           DO jpt = 1, jn_fix_pts 
              ji = ji_fix(jpt)
              jj = jj_fix(jpt)
-             IF ( zkiw(ji,jj) > 0.0 .AND.  ABS( zpy(ji,jj) - px(ji,jj) ) > ztol_fixed ) THEN     ! zpy is updated value; px is original value 
+             IF ( zkiw(ji,jj) > 0.0 .AND.  ABS( zpy(ji,jj) - px(ji,jj) ) > rtol_fixed ) THEN     ! zpy is updated value; px is original value 
                 jcount_fixed = jcount_fixed + 1
                 IF ( jcount_fixed < 50 ) PRINT *, px(ji,jj), zpy(ji,jj), ji, jj, jcount_fixed 
              ENDIF
@@ -812,11 +816,11 @@ CONTAINS
        l_test_fixed   = jcount_fixed == 0   .OR. .NOT. l_pass_fixed_pt_updates 
        IF ( l_test_shallow .AND. l_test_fixed  ) EXIT jiterationloop  
 
-       IF ( l_pass_shallow_updates ) THEN ! increment zpx before next pass at points where zpy < zmin_val
+       IF ( l_pass_shallow_updates ) THEN ! increment zpx before next pass at points where zpy < rmin_val
           DO jj = 2, kpj-1
             DO ji = 2,kpi-1
-              IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < zmin_val) THEN  
-                zpx_iteration(ji,jj) = zpx_iteration(ji,jj) + MAX(px(ji,jj), zfactor_shallow*zmin_val) -  zpy(ji,jj)        
+              IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rmin_val) THEN  
+                zpx_iteration(ji,jj) = zpx_iteration(ji,jj) + MAX(px(ji,jj), rfactor_shallow*rmin_val) -  zpy(ji,jj)        
               ENDIF 
             ENDDO
           ENDDO 
@@ -835,7 +839,7 @@ CONTAINS
     IF ( l_pass_shallow_updates .AND. jcount_shallow == 0) THEN 
       DO jj = 1, kpj
         DO ji = 1,kpi
-          IF ( zkiw(ji,jj) > 0.0 ) zpy(ji,jj) = MAX( zpy(ji,jj), zmin_val )         
+          IF ( zkiw(ji,jj) > 0.0 ) zpy(ji,jj) = MAX( zpy(ji,jj), rmin_val )         
         ENDDO
       ENDDO
     ENDIF 
