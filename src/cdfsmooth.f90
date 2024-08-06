@@ -596,37 +596,42 @@ CONTAINS
 !-----------------------------------------------------------------------------------------------
 !! Variables that can be set through the namelist 
 
-    LOGICAL                                      :: ll_npol_fold            ! north pole fold in grid? 
-    LOGICAL                                      :: ll_cycl                 ! this filter has only been tested for cyclic grids 
-!! for limited area models the bathymetry should be smoothed over a wider domain than that of the model; the margin should be at least korder*kpass
+    LOGICAL                     :: ln_npol_fold      ! north pole fold in grid? 
+    LOGICAL                     :: ln_ew_cycl        ! this filter has only been tested for EW cyclic grids 
+!! MJB: for limited area models the bathymetry should be smoothed over a wider domain than that of the model; the margin should be at least korder*kpass
 !! points and preferably 2*korder*kpass points (the bathymetry in nested models needs to match that of the outer domain in the nesting zone; that 
 !! might be done by including the nesting zone in the list of fixed points - but simpler solutions might be adequate) 
   
-    LOGICAL                                      :: l_single_point_response ! => study response to single non-zero value
-    LOGICAL                                      :: l_pass_shallow_updates  ! => update values where bathy < zmin_val between passes
-    LOGICAL                                      :: l_pass_fixed_pt_updates ! => update values where bathymetry should remain fixed
+    LOGICAL                     :: ln_single_point_response ! => study response to single non-zero value
+    LOGICAL                     :: ln_pass_shallow_updates  ! => update values where bathy < zmin_val between passes
+    LOGICAL                     :: ln_pass_fixed_pt_updates ! => update values where bathymetry should remain fixed
 
-    REAL(KIND=4)                                 :: rmin_val, rfactor_shallow, rtol_fixed, rtol_shallow ! see below
+    CHARACTER(LEN=256)          :: cn_fixed_points          ! file containing list of fixed points
+                                                            ! for ln_pass_fixed_pt_updates = T
 
-    INTEGER (KIND=4)                             :: ji_single_pt, jj_single_pt ! indices of single point (see l_single_point_response)
-    INTEGER(KIND=4)                              :: jst_prt, jend_prt ! 
+    REAL(KIND=4)                :: rn_min_val, rn_factor_shallow, rn_tol_fixed, rn_tol_shallow ! see below
+
+    INTEGER (KIND=4)            :: ji_single_pt, jj_single_pt ! indices of single point (see ln_single_point_response)
+    INTEGER(KIND=4)             :: jst_prt, jend_prt ! 
  
 !! The points that are printed out are set by ji_min_prt, jj_min_prt, ji_max_prt, jj_max_prt - these are local to prt_summary 
 
 !-----------------------------------------------------------------------------------------------
 
-    NAMELIST / nam_shapiro / ll_npol_fold, ll_cycl, l_single_point_response, l_pass_shallow_updates, l_pass_fixed_pt_updates, &
-   &                         ji_single_pt, jj_single_pt, jst_prt, jend_prt, rmin_val, rtol_shallow, rtol_fixed, rfactor_shallow 
+    NAMELIST / nam_shapiro / ln_npol_fold, ln_ew_cycl, ln_single_point_response, ln_pass_shallow_updates, &
+   &                         ln_pass_fixed_pt_updates, cn_fixed_points, ji_single_pt, jj_single_pt, jst_prt, jend_prt, &
+   &                         rn_min_val, rn_tol_shallow, rn_tol_fixed, rn_factor_shallow 
 !! Namelist default values 
-    ll_npol_fold = .FALSE.
-    ll_cycl = .FALSE. 
-    l_single_point_response = .FALSE.
-    l_pass_shallow_updates = .TRUE.
-    l_pass_fixed_pt_updates = .TRUE.
-    rmin_val        = 5.0    ! minimum depth (e.g. 10.0 metres) 
-    rtol_shallow    = 1.0    ! tolerance in metres of minimum shallow values (rmin_val - rtol_shallow) 
-    rtol_fixed      = 1.0    ! tolerance in metres for fit to bathymetry at point specified to be fixed  
-    rfactor_shallow = 1.5    ! rfactor_shallow needs to be slightly greater than 1.0   ! 1.1 to 1.5 are reasonable values
+    ln_npol_fold = .FALSE.
+    ln_ew_cycl = .FALSE. 
+    ln_single_point_response = .FALSE.
+    ln_pass_shallow_updates = .FALSE.
+    ln_pass_fixed_pt_updates = .FALSE.
+    cn_fixed_points   = ""
+    rn_min_val        = 5.0    ! minimum depth (e.g. 10.0 metres) 
+    rn_tol_shallow    = 1.0    ! tolerance in metres of minimum shallow values (rn_min_val - rn_tol_shallow) 
+    rn_tol_fixed      = 1.0    ! tolerance in metres for fit to bathymetry at point specified to be fixed  
+    rn_factor_shallow = 1.5    ! rn_factor_shallow needs to be slightly greater than 1.0   ! 1.1 to 1.5 are reasonable values
 
     ji_single_pt = 622 ; jj_single_pt = 779
     jst_prt = 400 ;      jend_prt = 405
@@ -657,14 +662,14 @@ CONTAINS
     PRINT *, ' col kpi = ', (px(kpi,jj), jj = jst_prt, jend_prt)  
 
 ! option for testing out response to a single non-zero value 
-    IF ( l_single_point_response ) THEN 
+    IF ( ln_single_point_response ) THEN 
        zpx(:,:) = 0.0 
        zpx(ji_single_pt,jj_single_pt) = 1.0     ! choose a point somewhere in the domain  
     END IF 
 
 ! read the indices of points to remain fixed 
-    IF ( l_pass_fixed_pt_updates ) THEN 
-       OPEN (unit=20, file = 'Notes/list_fixed_points.txt', form='formatted', status='old' ) 
+    IF ( ln_pass_fixed_pt_updates ) THEN 
+       OPEN (unit=20, file = trim(cn_fixed_points), form='formatted', status='old' ) 
        READ (20, *) jn_fix_pts
 
        ALLOCATE( ji_fix(jn_fix_pts), jj_fix(jn_fix_pts) )
@@ -686,10 +691,10 @@ CONTAINS
     PRINT *, ' point 1 zkiw' 
     CALL prt_summary( zkiw, zones, kpi, kpj) 
 
-    IF ( rmin_val > 0.0 ) THEN 
+    IF ( rn_min_val > 0.0 ) THEN 
        DO jj = 2, kpj-1
          DO ji = 2,kpi-1
-           IF ( zkiw(ji,jj) > 0.0 .AND. zpx(ji,jj) < rmin_val ) zpx(ji,jj) = rmin_val        
+           IF ( zkiw(ji,jj) > 0.0 .AND. zpx(ji,jj) < rn_min_val ) zpx(ji,jj) = rn_min_val        
          ENDDO
        ENDDO 
     ENDIF 
@@ -700,8 +705,8 @@ CONTAINS
 ! main calculations start 
 
 ! enforce cyclic conditions and north pole fold (southern boundary is assumed to be land) on zpx and zkiw
-    CALL impose_bcs( zpx,  kpi, kpj, ll_cycl, ll_npol_fold)
-    CALL impose_bcs( zkiw, kpi, kpj, ll_cycl, ll_npol_fold) 
+    CALL impose_bcs( zpx,  kpi, kpj, ln_ew_cycl, ln_npol_fold)
+    CALL impose_bcs( zkiw, kpi, kpj, ln_ew_cycl, ln_npol_fold) 
 
     zpy (:,:) = zpx(:,:)  ! initialisation of zpy is necessary for row 1 (and other outer rows/columns if non-periodic)
 
@@ -716,7 +721,7 @@ CONTAINS
      
           ztmp(:,:) = zpx(:,:)  ! initialision of jorder loop 
 
-          CALL impose_bcs( ztmp,  kpi, kpj, ll_cycl, ll_npol_fold) 
+          CALL impose_bcs( ztmp,  kpi, kpj, ln_ew_cycl, ln_npol_fold) 
 
           DO jorder=1,korder
 
@@ -756,7 +761,7 @@ CONTAINS
                 ENDDO  ! end loop jj
              ENDIF
 
-             CALL impose_bcs( zpy, kpi, kpj, ll_cycl, ll_npol_fold) 
+             CALL impose_bcs( zpy, kpi, kpj, ln_ew_cycl, ln_npol_fold) 
        
              PRINT *, 'jorder, point 2 zpy = ', jorder 
              CALL prt_summary( zpy, zkiw, kpi, kpj) 
@@ -773,17 +778,17 @@ CONTAINS
 
        END DO jpassloop 
 
-       IF ( .NOT. ( l_pass_fixed_pt_updates .OR. l_pass_shallow_updates ) ) EXIT jiterationloop  
+       IF ( .NOT. ( ln_pass_fixed_pt_updates .OR. ln_pass_shallow_updates ) ) EXIT jiterationloop  
 
-! Find the number of points where the filtered bathymetry (zpy) is less than rmin_val (to within tolerance rtol_shallow)  
+! Find the number of points where the filtered bathymetry (zpy) is less than rn_min_val (to within tolerance rn_tol_shallow)  
      
-       IF ( l_pass_shallow_updates ) THEN 
+       IF ( ln_pass_shallow_updates ) THEN 
           jcount_shallow = 0
           rms_int = 0.0 
-          PRINT *, ' zpy(ji,jj), ji, jj, jcount where zpy < rmin_val - rtol_shallow'  
+          PRINT *, ' zpy(ji,jj), ji, jj, jcount where zpy < rn_min_val - rn_tol_shallow'  
           DO jj = 2, kpj-1
              DO ji = 2,kpi-1
-                IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rmin_val - rtol_shallow ) THEN  
+                IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rn_min_val - rn_tol_shallow ) THEN  
                    jcount_shallow = jcount_shallow + 1
                    IF ( jcount_shallow < 50 ) PRINT *, zpy(ji,jj), ji, jj, jcount_shallow 
                 ENDIF
@@ -794,39 +799,39 @@ CONTAINS
           rms_int = SQRT( rms_int / znpts ) 
           PRINT *, 'jcount_shallow = ', jcount_shallow
           PRINT *, 'rms_int = ', rms_int
-       ENDIF ! l_pass_shallow_updates
+       ENDIF ! ln_pass_shallow_updates
 
-       IF ( l_pass_fixed_pt_updates ) THEN 
+       IF ( ln_pass_fixed_pt_updates ) THEN 
           jcount_fixed = 0 
-          PRINT *, ' px(ji,jj), zpy(ji,jj), ji, jj, jcount where ABS( zpy(ji,jj) - px(ji,jj) ) > rtol_fixed '  
+          PRINT *, ' px(ji,jj), zpy(ji,jj), ji, jj, jcount where ABS( zpy(ji,jj) - px(ji,jj) ) > rn_tol_fixed '  
           DO jpt = 1, jn_fix_pts 
              ji = ji_fix(jpt)
              jj = jj_fix(jpt)
-             IF ( zkiw(ji,jj) > 0.0 .AND.  ABS( zpy(ji,jj) - px(ji,jj) ) > rtol_fixed ) THEN     ! zpy is updated value; px is original value 
+             IF ( zkiw(ji,jj) > 0.0 .AND.  ABS( zpy(ji,jj) - px(ji,jj) ) > rn_tol_fixed ) THEN     ! zpy is updated value; px is original value 
                 jcount_fixed = jcount_fixed + 1
                 IF ( jcount_fixed < 50 ) PRINT *, px(ji,jj), zpy(ji,jj), ji, jj, jcount_fixed 
              ENDIF
           ENDDO
           PRINT *, 'jcount_fixed = ', jcount_fixed
-       ENDIF ! l_pass_fixed_pt_updates
+       ENDIF ! ln_pass_fixed_pt_updates
 
 ! If output bathymetry is too small at some sea points or not close enough to the original at the selected points, increment zpx 
 
-       l_test_shallow = jcount_shallow == 0 .OR. .NOT. l_pass_shallow_updates 
-       l_test_fixed   = jcount_fixed == 0   .OR. .NOT. l_pass_fixed_pt_updates 
+       l_test_shallow = jcount_shallow == 0 .OR. .NOT. ln_pass_shallow_updates 
+       l_test_fixed   = jcount_fixed == 0   .OR. .NOT. ln_pass_fixed_pt_updates 
        IF ( l_test_shallow .AND. l_test_fixed  ) EXIT jiterationloop  
 
-       IF ( l_pass_shallow_updates ) THEN ! increment zpx before next pass at points where zpy < rmin_val
+       IF ( ln_pass_shallow_updates ) THEN ! increment zpx before next pass at points where zpy < rn_min_val
           DO jj = 2, kpj-1
             DO ji = 2,kpi-1
-              IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rmin_val) THEN  
-                zpx_iteration(ji,jj) = zpx_iteration(ji,jj) + MAX(px(ji,jj), rfactor_shallow*rmin_val) -  zpy(ji,jj)        
+              IF ( zkiw(ji,jj) > 0.0 .AND. zpy(ji,jj) < rn_min_val) THEN  
+                zpx_iteration(ji,jj) = zpx_iteration(ji,jj) + MAX(px(ji,jj), rn_factor_shallow*rn_min_val) -  zpy(ji,jj)        
               ENDIF 
             ENDDO
           ENDDO 
        END IF 
        
-       IF ( l_pass_fixed_pt_updates ) THEN 
+       IF ( ln_pass_fixed_pt_updates ) THEN 
           DO jpt = 1, jn_fix_pts
              ji = ji_fix(jpt)
              jj = jj_fix(jpt)
@@ -836,10 +841,10 @@ CONTAINS
        
     END DO jiterationloop 
 
-    IF ( l_pass_shallow_updates .AND. jcount_shallow == 0) THEN 
+    IF ( ln_pass_shallow_updates .AND. jcount_shallow == 0) THEN 
       DO jj = 1, kpj
         DO ji = 1,kpi
-          IF ( zkiw(ji,jj) > 0.0 ) zpy(ji,jj) = MAX( zpy(ji,jj), rmin_val )         
+          IF ( zkiw(ji,jj) > 0.0 ) zpy(ji,jj) = MAX( zpy(ji,jj), rn_min_val )         
         ENDDO
       ENDDO
     ENDIF 
@@ -931,21 +936,21 @@ CONTAINS
   RETURN
   END SUBROUTINE prt_summary
   
-  SUBROUTINE impose_bcs( pfld, kpi, kpj, ll_cycl, ll_npol_fold) 
+  SUBROUTINE impose_bcs( pfld, kpi, kpj, ln_ew_cycl, ln_npol_fold) 
   REAL(KIND=4),    DIMENSION(:,:), INTENT(inout) :: pfld      
   INTEGER,                         INTENT(in   ) :: kpi, kpj
-  LOGICAL,                         INTENT(in   ) :: ll_cycl, ll_npol_fold
+  LOGICAL,                         INTENT(in   ) :: ln_ew_cycl, ln_npol_fold
 
   INTEGER ji, ijt 
     
 ! cyclic points in ji 
-  IF ( ll_cycl ) THEN
+  IF ( ln_ew_cycl ) THEN
      pfld(1  ,:) = pfld(kpi-1,:) 
      pfld(kpi,:) = pfld(2    ,:) 
   ENDIF
 
 ! north pole fold;  (southern boundary is assumed to be land) 
-  IF ( ll_npol_fold ) THEN 
+  IF ( ln_npol_fold ) THEN 
      DO ji = 2, kpi 
         ijt = kpi-ji+2
         pfld(ji,kpj) = pfld(ijt,kpj-2)
