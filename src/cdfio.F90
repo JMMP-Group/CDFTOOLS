@@ -1981,13 +1981,13 @@ CONTAINS
     lao=.FALSE.
 
     clvar=cdvar
-    IF ( clvar == cn_ve3v) THEN
-    SELECT CASE ( cg_zgr_ver )
-    CASE ( 'v2.0' ) ; clvar = 'e3v_ps'
-    CASE ( 'v3.0' ) ; clvar = 'e3v'
-    CASE ( 'v3.6' ) ; clvar = 'e3v_0'
-    END SELECT
-    ENDIF
+    !IF ( clvar == cn_ve3v) THEN
+    !SELECT CASE ( cg_zgr_ver )
+    !CASE ( 'v2.0' ) ; clvar = 'e3v_ps'
+    !CASE ( 'v3.0' ) ; clvar = 'e3v'
+    !CASE ( 'v3.6' ) ; clvar = 'e3v_0'
+    !END SELECT
+    !ENDIF
 
     CALL ERR_HDL(NF90_OPEN(cdfile,NF90_NOWRITE,incid) )
     CALL ERR_HDL(NF90_INQ_VARID ( incid,clvar,id_var))
