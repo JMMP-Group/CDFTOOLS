@@ -44,7 +44,8 @@ EXEC = cdfmoy cdfmoyt cdfstd  cdfmoy_weighted cdfmoy_freq cdfvT cdfuv\
        cdfisopsi cdf2matlab cdffixtime cdfgeostrophy cdfchgrid cdfcmp cdfmsk cdfocape cdf_compress \
        cdf_domain_modif  cdf_domain2bathy \
        cdf_remake_bathy \
-       cdf_dynadv_ubs  cdf_gsw
+       cdf_dynadv_ubs  cdf_gsw \
+       cdfvrmp
 
 .PHONY: all help clean cleanexe install man installman zclass_list.txt
 
@@ -565,6 +566,9 @@ cdf_domain2bathy:  cdfio.o modutils.o cdf_domain2bathy.f90
 cdf_gsw: modgsw.o cdfio.o cdf_gsw.F90
 	$(F90) cdf_gsw.F90  -o $(BINDIR)/cdf_gsw cdfio.o modcdfnames.o modgsw.o $(FFLAGS) $(GSWLIB)
 
+cdfvrmp: cdfio.o  modcdfnames.o cdftools.o modutils.o vremap.o cdfvrmp.f90
+	$(F90) cdfvrmp.f90 -o $(BINDIR)/cdfvrmp cdfio.o cdftools.o modutils.o modcdfnames.o vremap.o $(FFLAGS)
+
 ## Modules
 
 cdfio.o: cdfio.F90 modcdfnames.o
@@ -587,6 +591,9 @@ modutils.o: cdfio.o modutils.f90
 
 modgsw.o:  modgsw.F90
 	$(F90) -c modgsw.F90 $(FFLAGS)
+
+vremap.o: vremap.F90
+	$(F90) -c vremap.F90 $(FFLAGS)
 
 ## Utilities
 clean:
