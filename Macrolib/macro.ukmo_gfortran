@@ -9,7 +9,7 @@ CMIP6 =
 F90=gfortran
 #OMP=-fopenmp
 OMP=
-FFLAGS= -O $(NCDF) $(NC4) -fno-second-underscore -ffree-line-length-256 $(OMP)
+FFLAGS= -O $(NCDF) $(NC4) -Wl,-rpath=${NETCDFF_ROOT}/lib -fno-second-underscore -ffree-line-length-256 $(OMP)
 
 #INSTALL=$(HOME)/local/bin
 #INSTALL_MAN=$(HOME)/local/man
