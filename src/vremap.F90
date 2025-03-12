@@ -38,10 +38,10 @@ CONTAINS
       INTEGER(KIND=4), INTENT(in   )                              ::   kjpk_in    ! Number of input levels
       INTEGER(KIND=4), INTENT(in   )                              ::   kjpk_out   ! Number of output levels
       INTEGER(KIND=4), INTENT(in   )                              ::   kn_var     ! Number of variables
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_in)          ::   phin       ! Input thicknesses
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_out)         ::   phout      ! Output thicknesses
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_in , kn_var) ::   ptin       ! Input data
-      REAL(KIND=4)   , INTENT(inout), DIMENSION(kjpk_out, kn_var) ::   ptout      ! Remapped data
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_in)          ::   phin       ! Input thicknesses
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_out)         ::   phout      ! Output thicknesses
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_in , kn_var) ::   ptin       ! Input data
+      REAL(KIND=8)   , INTENT(inout), DIMENSION(kjpk_out, kn_var) ::   ptout      ! Remapped data
       !
       INTEGER(KIND=4), PARAMETER :: ndof = 1
       INTEGER(KIND=4)            :: jk, jn
@@ -119,10 +119,10 @@ CONTAINS
       INTEGER(KIND=4), INTENT(in   )                              ::   kjpk_in    ! Number of input levels
       INTEGER(KIND=4), INTENT(in   )                              ::   kjpk_out   ! Number of output levels
       INTEGER(KIND=4), INTENT(in   )                              ::   kn_var     ! Number of variables
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_in)          ::   pzin       ! Input depths
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_out)         ::   pzout      ! Output depths
-      REAL(KIND=4)   , INTENT(in   ), DIMENSION(kjpk_in , kn_var) ::   ptin       ! Input data
-      REAL(KIND=4)   , INTENT(inout), DIMENSION(kjpk_out, kn_var) ::   ptout      ! Interpolated data
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_in)          ::   pzin       ! Input depths
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_out)         ::   pzout      ! Output depths
+      REAL(KIND=8)   , INTENT(in   ), DIMENSION(kjpk_in , kn_var) ::   ptin       ! Input data
+      REAL(KIND=8)   , INTENT(inout), DIMENSION(kjpk_out, kn_var) ::   ptout      ! Interpolated data
       !
       INTEGER(KIND=4)                                             :: jkin, jkout, jn
       !!--------------------------------------------------------------------
