@@ -45,7 +45,7 @@ EXEC = cdfmoy cdfmoyt cdfstd  cdfmoy_weighted cdfmoy_freq cdfvT cdfuv\
        cdf_domain_modif  cdf_domain2bathy \
        cdf_remake_bathy \
        cdf_dynadv_ubs  cdf_gsw \
-       cdfvrmp
+       cdf_mshmsk_update_e3 cdfvrmp 
 
 .PHONY: all help clean cleanexe install man installman zclass_list.txt
 
@@ -568,6 +568,9 @@ cdf_gsw: modgsw.o cdfio.o cdf_gsw.F90
 
 cdfvrmp: cdfio.o  modcdfnames.o cdftools.o modutils.o vremap.o cdfvrmp.f90
 	$(F90) cdfvrmp.f90 -o $(BINDIR)/cdfvrmp cdfio.o cdftools.o modutils.o modcdfnames.o vremap.o $(FFLAGS)
+
+cdf_mshmsk_update_e3: cdfio.o  modcdfnames.o cdf_mshmsk_update_e3.F90
+	$(F90) cdf_mshmsk_update_e3.F90 -o $(BINDIR)/cdf_mshmsk_update_e3 cdfio.o modcdfnames.o $(FFLAGS)
 
 ## Modules
 

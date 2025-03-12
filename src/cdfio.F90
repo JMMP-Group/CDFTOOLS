@@ -37,11 +37,12 @@
   !!   getvar3d      : read 3D variable  at once
   !!   getvaratt     : read variable attributes
   !!   gettimeatt    : get time attributes
-  !!   getvar        : read the variable
+  !!   getvar        : read the variable (REAL 4)
   !!   getvare3      : read e3 type variable
   !!   getvarid      : get the varid of a variable in a file
   !!   getvarname    : get the name of a variable, according to its varid
-  !!   getvarxz      : get a x-z slice of 3D data
+  !!   getvarxz      : get a x-z slice of 3D data (REAL 4)
+  !!   getvarxz_dp   : get a x-z slice of 3D data (REAL 8)
   !!   getvaryz      : get a y-z slice of 3D data
   !!   getvdim       : get the number of dim of a variable
   !!   getvardim     : get the values of the vertical coordinates variable
@@ -174,7 +175,7 @@
   PUBLIC :: copyatt, create, createvar, getvaratt, cvaratt, gettimeatt
   PUBLIC :: putatt, putheadervar, putvar, putvar1d, putvar0d, atted, puttimeatt
   PUBLIC :: getatt, getdim, getvdim, getdimvar,getipk, getnvar, getvarname, getvarid
-  PUBLIC :: getvar, getvarxz, getvaryz, getvar1d, getvare3, getvar3d, getvar3dt, getvar4d, getspval
+  PUBLIC :: getvar, getvarxz, getvarxz_dp, getvaryz, getvar1d, getvare3, getvar3d, getvar3dt, getvar4d, getspval
   PUBLIC :: gettimeseries
   PUBLIC :: closeout, ncopen
   PUBLIC :: ERR_HDL
@@ -1608,6 +1609,7 @@ CONTAINS
 
   END FUNCTION getvar
 
+
   FUNCTION  getvar3d (cdfile,cdvar,kpi,kpj,kpz, kimin, kjmin, kkmin, ktime )
     !!---------------------------------------------------------------------
     !!                  ***  FUNCTION  getvar3d  ***
@@ -2041,6 +2043,119 @@ CONTAINS
     istatus=NF90_CLOSE(incid)
 
   END FUNCTION getvarxz
+
+   
+  FUNCTION  getvarxz_dp (cdfile, cdvar, kj, kpi, kpz, kimin, kkmin, ktime)
+    !!-------------------------------------------------------------------------
+    !!                  ***  FUNCTION  getvarxz_dp  ***
+    !!
+    !! ** Purpose : Return the 2D REAL 8 variable x-z slab cvar, from cdfile at j=kj
+    !!              kpi,kpz are the  size of the 2D variable
+    !!
+    !!-------------------------------------------------------------------------
+    CHARACTER(LEN=*),          INTENT(in) :: cdfile        ! file name to work with
+    CHARACTER(LEN=*),          INTENT(in) :: cdvar         ! variable name to work with
+    INTEGER(KIND=4),           INTENT(in) :: kj            ! Optional variable. If missing 1 is assumed
+    INTEGER(KIND=4),           INTENT(in) :: kpi, kpz      ! size of the 2D variable
+    INTEGER(KIND=4), OPTIONAL, INTENT(in) :: kimin, kkmin  ! Optional variable. If missing 1 is assumed
+    INTEGER(KIND=4), OPTIONAL, INTENT(in) :: ktime         ! Optional variable. If missing 1 is assumed 
+    REAL(KIND=8), DIMENSION(kpi,kpz)      :: getvarxz_dp   ! 2D REAL 8 holding variable x-z slab at kj
+
+    INTEGER(KIND=4), DIMENSION(4) :: istart, icount
+    INTEGER(KIND=4)               :: incid, id_var
+    INTEGER(KIND=4)               :: istatus, ilev, imin, kmin
+    INTEGER(KIND=4)               :: itime, ilog
+    INTEGER(KIND=4)               :: idum
+    REAL(KIND=8)                  :: sf=1., ao=0.       !  Scale factor and add_offset
+    REAL(KIND=8)                  :: spval              !  Missing values
+    LOGICAL                       :: llog=.FALSE. , lsf=.FALSE. , lao=.FALSE.
+    CHARACTER(LEN=256)            :: clvar   ! local name for cdf var (modified)
+    !!-------------------------------------------------------------------------
+ 
+    IF (PRESENT(kimin) ) THEN
+       imin=kimin
+    ELSE
+       imin=1
+    ENDIF
+
+    IF (PRESENT(kkmin) ) THEN
+       kmin=kkmin
+    ELSE
+       kmin=1
+    ENDIF
+
+    IF (PRESENT(ktime) ) THEN
+       itime=ktime
+    ELSE
+       itime=1
+    ENDIF
+
+    ! Must reset the flags to false for every call to getvar
+    llog=.FALSE.
+    lsf=.FALSE.
+    lao=.FALSE.
+
+    clvar=cdvar
+    !IF ( clvar == cn_ve3v) THEN
+    !SELECT CASE ( cg_zgr_ver )
+    !CASE ( 'v2.0' ) ; clvar = 'e3v_ps'
+    !CASE ( 'v3.0' ) ; clvar = 'e3v'
+    !CASE ( 'v3.6' ) ; clvar = 'e3v_0'
+    !END SELECT
+    !ENDIF
+
+    CALL ERR_HDL(NF90_OPEN(cdfile,NF90_NOWRITE,incid) )
+    CALL ERR_HDL(NF90_INQ_VARID ( incid,clvar,id_var))
+
+    spval = getspval ( cdfile, clvar )
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'savelog10')
+    IF (istatus == NF90_NOERR ) THEN
+       ! there is a scale factor for this variable
+       istatus=NF90_GET_ATT(incid,id_var,'savelog10',ilog)
+       IF ( ilog /= 0 ) llog=.TRUE.
+    ENDIF
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'scale_factor')
+    IF (istatus == NF90_NOERR ) THEN
+       ! there is a scale factor for this variable
+       istatus=NF90_GET_ATT(incid,id_var,'scale_factor',sf)
+       IF ( sf /= 1. ) lsf=.TRUE.
+    ENDIF
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'add_offset')
+    IF (istatus == NF90_NOERR ) THEN
+       ! there is a scale factor for this variable
+       istatus=NF90_GET_ATT(incid,id_var,'add_offset',ao)
+       IF ( ao /= 0.) lao=.TRUE.
+    ENDIF
+
+    ! detect if there is a y dimension in cdfile
+    istatus=NF90_INQ_DIMID(incid,'y',idum)
+    IF ( istatus == NF90_NOERR ) THEN  ! the file has a 'y' dimension
+      istart=(/imin,kj,kmin,itime/)
+      ! JMM ! it workd for X Y Z T file,   not for X Y T .... try to found a fix !
+      icount=(/kpi,1,kpz,1/)
+    ELSE    ! no y dimension
+      istart=(/imin,kmin,itime,1/)
+      icount=(/kpi,kpz,1,1/)
+    ENDIF
+
+    istatus=NF90_GET_VAR(incid,id_var,getvarxz_dp, start=istart,count=icount)
+    IF ( istatus /= 0 ) THEN
+       PRINT *,' Problem in getvarxz_dp for ', TRIM(clvar)
+       CALL ERR_HDL(istatus)
+       STOP 98
+    ENDIF
+
+    ! Caution : order does matter !
+    IF (lsf )  WHERE (getvarxz_dp /= spval )  getvarxz_dp=getvarxz_dp*sf
+    IF (lao )  WHERE (getvarxz_dp /= spval )  getvarxz_dp=getvarxz_dp + ao
+    IF (llog)  WHERE (getvarxz_dp /= spval )  getvarxz_dp=10**getvarxz_dp
+
+    istatus=NF90_CLOSE(incid)
+
+  END FUNCTION getvarxz_dp
 
 
   FUNCTION  getvaryz (cdfile, cdvar, ki, kpj, kpz, kjmin, kkmin, ktime)
