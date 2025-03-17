@@ -226,7 +226,7 @@ MODULE modCdfNames
 
     ! variables 
     NAMELIST/namvars/ cn_votemper, cn_vosaline
-    NAMELIST/namvars/ cn_vozocrtx, cn_vomecrty, cn_vomeeivv, cn_vovecrtz
+    NAMELIST/namvars/ cn_vozocrtx, cn_vomecrty, cn_vomeeivv, cn_vovecrtz, cn_sozotaux
     NAMELIST/namvars/ cn_sossheig, cn_somxl010, cn_somxlt02
     NAMELIST/namvars/ cn_sohefldo, cn_solhflup, cn_sosbhfup
     NAMELIST/namvars/ cn_solwfldo, cn_soshfldo
