@@ -98,7 +98,7 @@ PROGRAM cdfmocsig
   TYPE(variable), DIMENSION(:), ALLOCATABLE       :: stypvar              ! output var properties
 
   LOGICAL, DIMENSION(3)                           :: lbin                 ! flag for bin specifications
-  LOGICAL                                         :: lntr                 ! flag for neutral density
+  LOGICAL                                         :: lntr = .FALSE.       ! flag for neutral density
   LOGICAL                                         :: lbas   = .FALSE.     ! flag for basins file
   LOGICAL                                         :: lisodep= .FALSE.     ! flag for isopycnal zonal mean
   LOGICAL                                         :: lprint = .FALSE.     ! flag for extra print
