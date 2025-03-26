@@ -191,8 +191,8 @@ PROGRAM cdfmean
   ENDIF
 
   ! Open standard output with recl=256 to avoid wrapping of long lines (ifort)
-  OPEN(6,FORM='FORMATTED',RECL=256)  ! ifort
-  ! OPEN(6,FORM='FORMATTED')          ! gfortran
+  ! OPEN(6,FORM='FORMATTED',RECL=256)  ! ifort
+  OPEN(6,FORM='FORMATTED')          ! gfortran
 
   cglobal = 'Partial step computation'
   ijarg = 1 
