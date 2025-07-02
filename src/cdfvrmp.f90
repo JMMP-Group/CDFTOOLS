@@ -43,7 +43,7 @@ PROGRAM cdfvrmp
   INTEGER(KIND=4)   , DIMENSION(1)                    :: ipk, id_varout          ! only one output variable
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: navloninp, navlatinp
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbathyinp, mbathyout, msk_out, msk_inp !tmaskutil
-  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: ssrmask, mbk_inp, mbk_out, wndmask
+  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: ssrmask, mbk_inp, mbk_out, wndmask, rmp_msk
 
   REAL(KIND=4)                                        :: zspval                  ! missing value
   REAL(KIND=8)      , PARAMETER                       :: eps = 1.e-15            ! accuracy param
@@ -247,6 +247,7 @@ PROGRAM cdfvrmp
   ALLOCATE ( mbk_out  ( npiglo, npjglo ) )
   ALLOCATE ( ssrmask  ( npiglo, npjglo ) )
   ALLOCATE ( wndmask  ( npiglo, npjglo ) )
+  ALLOCATE ( rmp_msk  ( npiglo, npjglo ) )
   ALLOCATE ( navloninp( npiglo, npjglo ) )
   ALLOCATE ( navlatinp( npiglo, npjglo ) )
   ALLOCATE ( mbathyinp( npiglo, npjglo ) )
@@ -275,6 +276,7 @@ PROGRAM cdfvrmp
      cv_msk       = cn_tmask
      mbk_inp(:,:) = mbathyinp(:,:)
      mbk_out(:,:) = getvar(cf_msh , "mbkt", 1, npiglo, npjglo)
+     rmp_msk(:,:) = getvar(cf_msh , "trmp_mask", 1, npiglo, npjglo)
   CASE ( 'U' )
      IF ( scheme == 'ppm' ) THEN
         cv_e3 = cn_ve3u
@@ -289,7 +291,8 @@ PROGRAM cdfvrmp
         DO ji=1,npiglo
            mbk_inp(ji,jj) = MIN( mbathyinp(ji+1,jj), mbathyinp(ji,jj) )
         END DO
-     END DO 
+     END DO
+     rmp_msk(:,:) = getvar(cf_msh , "urmp_mask", 1, npiglo, npjglo) 
   CASE ( 'V' )
      IF ( scheme == 'ppm' ) THEN
         cv_e3 = cn_ve3v
@@ -305,6 +308,7 @@ PROGRAM cdfvrmp
            mbk_inp(ji,jj) = MIN( mbathyinp(ji,jj+1), mbathyinp(ji,jj) )
         END DO
      END DO
+     rmp_msk(:,:) = getvar(cf_msh , "vrmp_mask", 1, npiglo, npjglo)
   !CASE ( 'W' )
   !   cv_e3        = cn_ve3w
   !   cv_dep       = cn_gdepw
@@ -352,7 +356,7 @@ PROGRAM cdfvrmp
         ! get variable
         var_inp(:,:) = getvarxz_dp(cf_inp, cv_inp, jj, npiglo, npkinp, ktime=jt) * msk_inp(:,:)
         DO ji=1,npiglo
-           IF ( ssrmask(ji,jj)*wndmask(ji,jj) == 1 ) THEN
+           IF ( (ssrmask(ji,jj)*wndmask(ji,jj) == 1) .AND. (rmp_msk(ji,jj) == 1) ) THEN
               nk_inp = mbk_inp(ji,jj)
               nk_out = mbk_out(ji,jj)
               IF ( lverbose .AND. scheme == "ppm") THEN 

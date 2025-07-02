@@ -37,15 +37,17 @@ PROGRAM cdf_mshmsk_update_e3
   INTEGER                                             :: id_navlat, id_navlon, id_navlev, id_time
   INTEGER                                             :: idx, idy, idz, idt
   INTEGER                                             :: id_tmsk, id_umsk, id_vmsk, id_fmsk
+  INTEGER                                             :: id_trmp, id_urmp, id_vrmp
  
-  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt_trg, mbk_trg, mskup
+  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt_trg, mbkt_inp, mskup
+  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbk_wrki, mbk_wrkt
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt, mbku, mbkv
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: tmask, umask, vmask, fmask
   INTEGER           ,                       PARAMETER :: dp = SELECTED_REAL_KIND(15,307) ! double precision (real 8)
 
   REAL(dp)          , DIMENSION(:)      , ALLOCATABLE :: dtim                    ! time counter
   REAL(dp)          , DIMENSION(:)      , ALLOCATABLE :: gdept_1d, gdepw_1d      ! depth variable
-  REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: hdep_trg, e3_trg 
+  REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: hdep_trg, e3_inp, e3_trg
   REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: navlon, navlat
   REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: e3w
   REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: gdepw !, gdept
@@ -195,8 +197,8 @@ PROGRAM cdf_mshmsk_update_e3
   ENDIF
 
   ! Allocate working arrays
-  ALLOCATE ( gdept_1d   ( npkout ) )
-  ALLOCATE ( gdepw_1d   ( npkout ) )
+  ALLOCATE ( gdept_1d   ( npkinp ) )
+  ALLOCATE ( gdepw_1d   ( npkinp ) )
   ALLOCATE ( mbkt       ( npiglo, npjglo ) )
   ALLOCATE ( mbku       ( npiglo, npjglo ) )
   ALLOCATE ( mbkv       ( npiglo, npjglo ) )
@@ -205,8 +207,11 @@ PROGRAM cdf_mshmsk_update_e3
   ALLOCATE ( navlat     ( npiglo, npjglo ) )
   ALLOCATE ( hdep_trg   ( npiglo, npjglo ) )
   ALLOCATE ( mbkt_trg   ( npiglo, npjglo ) )
-  ALLOCATE ( mbk_trg    ( npiglo, npjglo ) )
-  ALLOCATE ( e3_trg     ( npiglo, npjglo ) )
+  ALLOCATE ( mbkt_inp   ( npiglo, npjglo ) )
+  ALLOCATE ( mbk_wrkt   ( npiglo, npjglo ) )
+  ALLOCATE ( mbk_wrki   ( npiglo, npjglo ) )
+  ALLOCATE ( e3_trg     ( npiglo, npkout ) )
+  ALLOCATE ( e3_inp     ( npiglo, npkinp ) )
   ALLOCATE ( e3w        ( npiglo, npjglo) )
   ALLOCATE ( gdepw      ( npiglo, npjglo ) )
   ALLOCATE ( zttmp      ( npiglo, npjglo ) )
@@ -222,6 +227,7 @@ PROGRAM cdf_mshmsk_update_e3
   tmask(:,:)    = getvar  (cf_trg, cn_tmask , 1  , npiglo, npjglo)   
   umask(:,:)    = getvar  (cf_trg, cn_umask , 1  , npiglo, npjglo)
   vmask(:,:)    = getvar  (cf_trg, cn_vmask , 1  , npiglo, npjglo)
+  mbkt_inp(:,:) = getvar  (cf_inp, cn_mbathy, 1  , npiglo, npjglo)
   gdept_1d(:)   = getvar1d(cf_inp, cn_gdept , npkinp             )
   gdepw_1d(:)   = getvar1d(cf_inp, cn_gdepw , npkinp             )
   navlon(:,:)   = getvar  (cf_inp, cn_vlon2d, 1  , npiglo, npjglo)
@@ -240,13 +246,24 @@ PROGRAM cdf_mshmsk_update_e3
   ! ----------------------------------------------------------------------------------
 
   ! Compute the bathymetry of the target mesh_mask @ T-grid
+  ! and exclude points where e3 are identical
   hdep_trg(:,:) = 0.0d0
   DO jj = 1, npjglo
+     e3_inp(:,:) = getvarxz_dp(cf_inp, cn_ve3t, jj, npiglo, npkinp)
      e3_trg(:,:) = getvarxz_dp(cf_trg, cn_ve3t, jj, npiglo, npkout)
      DO ji = 1, npiglo
+        e3_inp(ji,mbkt_inp(ji,jj)+1:npkinp) = 0.0d0
+        e3_trg(ji,mbkt_trg(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbkt_trg(ji,jj) ) ) * tmask(ji,jj)
+        ! Exclude points where e3 in the input and output grid are identical
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
      END DO
   END DO
+
+  ! Save mask of points where e3 in the input and output grid are identical
+  ierr = NF90_PUT_VAR( nczgr, id_trmp, mskup, start=(/1,1/), count=(/npiglo,npjglo/) )
+  IF ( ierr /= NF90_NOERR ) THEN  ; PRINT *, NF90_STRERROR(ierr) ; STOP 99 ;
+  ENDIF
 
   ! Initialising land points
   WHERE ( hdep_trg(:,:) == 0 ) mskup(:,:)  = 0
@@ -261,7 +278,7 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3t @ jk if needed
-     e3(:,:,jk) = getvar(cf_inp, cn_ve3t, jk, npiglo, npjglo) 
+     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3t, jk, npiglo, npjglo) 
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk) ! W-level @ jk+1, first guess
      WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
         e3(:,:,jk) = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
@@ -309,27 +326,44 @@ PROGRAM cdf_mshmsk_update_e3
   ! ----------------------------------------------------------------------------------
   ! U-GRID
   ! ----------------------------------------------------------------------------------
-
-  ! Compute the bathymetry of the target mesh_mask @ U-grid
-  hdep_trg(:,:) = 0.0d0
+ 
   e3(:,:,:)     = 0.0d0
   mskup(:,:)    = 1
-  mbk_trg(:,:)  = npkout-1
 
-  ! Compute number of wet levels at U-points
+  ! Compute number of wet levels @ U-points
+  mbk_wrki(:,:)  = npkinp-1
   DO jj=1,npjglo
      DO ji=1,npiglo
-        mbk_trg(ji,jj) = MIN( mbkt_trg(ji+1,jj), mbkt_trg(ji,jj) )
+        mbk_wrki(ji,jj) = MIN( mbkt_inp(ji+1,jj), mbkt_inp(ji,jj) )
+     END DO
+  END DO
+  mbk_wrkt(:,:)  = npkout-1
+  ! Compute number of wet levels @ U-points
+  DO jj=1,npjglo
+     DO ji=1,npiglo
+        mbk_wrkt(ji,jj) = MIN( mbkt_trg(ji+1,jj), mbkt_trg(ji,jj) )
      END DO
   END DO
 
-  ! Compute ocean depth at U-points 
+  ! Compute the bathymetry of the target mesh_mask @ U-grid
+  ! and exclude points where e3 are identical
+  hdep_trg(:,:) = 0.0d0
   DO jj = 1, npjglo
+     e3_inp(:,:) = getvarxz_dp(cf_inp, cn_ve3u, jj, npiglo, npkinp)
      e3_trg(:,:) = getvarxz_dp(cf_trg, cn_ve3u, jj, npiglo, npkout)
      DO ji = 1, npiglo
-        hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_trg(ji,jj) ) ) * umask(ji,jj)
+        e3_inp(ji,mbk_wrki(ji,jj)+1:npkinp) = 0.0d0
+        e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
+        hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * umask(ji,jj)
+        ! Exclude points where e3 in the input and output grid are identical
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
      END DO
   END DO
+
+  ! Save mask of points where e3 in the input and output grid are identical
+  ierr = NF90_PUT_VAR( nczgr, id_urmp, mskup, start=(/1,1/), count=(/npiglo,npjglo/) )
+  IF ( ierr /= NF90_NOERR ) THEN  ; PRINT *, NF90_STRERROR(ierr) ; STOP 99 ;
+  ENDIF
 
   ! Initialising land points
   WHERE ( hdep_trg(:,:) == 0 ) mskup(:,:)  = 0
@@ -346,7 +380,7 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3u @ jk if needed
-     e3(:,:,jk) = getvar(cf_inp, cn_ve3u, jk, npiglo, npjglo)
+     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3u, jk, npiglo, npjglo)
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
      WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
         e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
@@ -369,7 +403,7 @@ PROGRAM cdf_mshmsk_update_e3
 
   ! mbku
   WHERE( hdep_trg(:,:) == 0.0d0 ) ; mbku(:,:) = 0        ! land
-  ELSE WHERE                   ; mbku(:,:) = npkinp-1 ! ocean 
+  ELSE WHERE                      ; mbku(:,:) = npkinp-1 ! ocean 
   END WHERE
 
   DO jj = 1, npjglo
@@ -389,26 +423,43 @@ PROGRAM cdf_mshmsk_update_e3
   ! V-GRID
   ! ----------------------------------------------------------------------------------
 
-  ! Compute the bathymetry of the target mesh_mask @ V-grid
-  hdep_trg(:,:) = 0.0d0
   e3(:,:,:)     = 0.0d0
   mskup(:,:)    = 1
-  mbk_trg(:,:)  = npkout-1
 
-  ! Compute number of wet levels at V-points
+  ! Compute number of wet levels @ V-points
+  mbk_wrki(:,:)  = npkinp-1
   DO jj=1,npjglo
      DO ji=1,npiglo
-        mbk_trg(ji,jj) = MIN( mbkt_trg(ji,jj+1), mbkt_trg(ji,jj) )
+        mbk_wrki(ji,jj) = MIN( mbkt_inp(ji,jj+1), mbkt_inp(ji,jj) )
+     END DO
+  END DO
+  mbk_wrkt(:,:)  = npkout-1
+  ! Compute number of wet levels @ V-points
+  DO jj=1,npjglo
+     DO ji=1,npiglo
+        mbk_wrkt(ji,jj) = MIN( mbkt_trg(ji,jj+1), mbkt_trg(ji,jj) )
      END DO
   END DO
 
-  ! Compute ocean depth at V-points 
-  DO jj = 1, npjglo-1
+  ! Compute the bathymetry of the target mesh_mask @ V-grid
+  ! and exclude points where e3 are identical
+  hdep_trg(:,:) = 0.0d0
+  DO jj = 1, npjglo
+     e3_inp(:,:) = getvarxz_dp(cf_inp, cn_ve3v, jj, npiglo, npkinp)
      e3_trg(:,:) = getvarxz_dp(cf_trg, cn_ve3v, jj, npiglo, npkout)
      DO ji = 1, npiglo
-        hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_trg(ji,jj) ) ) * vmask(ji,jj)
+        e3_inp(ji,mbk_wrki(ji,jj)+1:npkinp) = 0.0d0
+        e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
+        hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * vmask(ji,jj)
+        ! Exclude points where e3 in the input and output grid are identical
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
      END DO
   END DO
+
+  ! Save mask of points where e3 in the input and output grid are identical
+  ierr = NF90_PUT_VAR( nczgr, id_vrmp, mskup, start=(/1,1/), count=(/npiglo,npjglo/) )
+  IF ( ierr /= NF90_NOERR ) THEN  ; PRINT *, NF90_STRERROR(ierr) ; STOP 99 ;
+  ENDIF
 
   ! Initialising land points
   WHERE ( hdep_trg(:,:) == 0.0d0 ) mskup(:,:)  = 0
@@ -425,7 +476,7 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3v @ jk if needed
-     e3(:,:,jk) = getvar(cf_inp, cn_ve3v, jk, npiglo, npjglo)
+     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3v, jk, npiglo, npjglo)
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
      WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
         e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
@@ -448,7 +499,7 @@ PROGRAM cdf_mshmsk_update_e3
  
   ! mbkv
   WHERE( hdep_trg(:,:) == 0.0d0 ) ; mbkv(:,:) = 0        ! land
-  ELSE WHERE                   ; mbkv(:,:) = npkinp-1 ! ocean 
+  ELSE WHERE                      ; mbkv(:,:) = npkinp-1 ! ocean 
   END WHERE
 
   DO jj = 1, npjglo
@@ -524,6 +575,9 @@ CONTAINS
     ierr=NF90_DEF_VAR(nczgr, 'tmask',         NF90_BYTE, (/idx,idy,idz,idt/), id_tmsk )
     ierr=NF90_DEF_VAR(nczgr, 'umask',         NF90_BYTE, (/idx,idy,idz,idt/), id_umsk )
     ierr=NF90_DEF_VAR(nczgr, 'vmask',         NF90_BYTE, (/idx,idy,idz,idt/), id_vmsk )
+    ierr=NF90_DEF_VAR(nczgr, 'trmp_mask',     NF90_BYTE, (/idx,idy,idt/), id_trmp )
+    ierr=NF90_DEF_VAR(nczgr, 'urmp_mask',     NF90_BYTE, (/idx,idy,idt/), id_urmp )
+    ierr=NF90_DEF_VAR(nczgr, 'vrmp_mask',     NF90_BYTE, (/idx,idy,idt/), id_vrmp )
 
     ierr = NF90_ENDDEF(nczgr)
 
