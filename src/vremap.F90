@@ -45,7 +45,7 @@ CONTAINS
       !
       INTEGER(KIND=4), PARAMETER :: ndof = 1
       INTEGER(KIND=4)            :: jk, jn
-      REAL(KIND=8)               ::  zwin(kjpk_in+1) ,  ztin(ndof, kn_var, kjpk_in)    ! rmap1d uses dp
+      REAL(KIND=8)               :: zwin(kjpk_in+1) ,  ztin(ndof, kn_var, kjpk_in)    ! rmap1d uses dp
       REAL(KIND=8)               :: zwout(kjpk_out+1), ztout(ndof, kn_var, kjpk_out)   ! rmap1d uses dp
       TYPE(rmap_work) :: work
       TYPE(rmap_opts) :: opts

@@ -38,6 +38,7 @@
   !!   getvaratt     : read variable attributes
   !!   gettimeatt    : get time attributes
   !!   getvar        : read the variable (REAL 4)
+  !!   getvar_dp     : read the variable (REAL 8)
   !!   getvare3      : read e3 type variable
   !!   getvarid      : get the varid of a variable in a file
   !!   getvarname    : get the name of a variable, according to its varid
@@ -175,7 +176,8 @@
   PUBLIC :: copyatt, create, createvar, getvaratt, cvaratt, gettimeatt
   PUBLIC :: putatt, putheadervar, putvar, putvar1d, putvar0d, atted, puttimeatt
   PUBLIC :: getatt, getdim, getvdim, getdimvar,getipk, getnvar, getvarname, getvarid
-  PUBLIC :: getvar, getvarxz, getvarxz_dp, getvaryz, getvar1d, getvare3, getvar3d, getvar3dt, getvar4d, getspval
+  PUBLIC :: getvar, getvar_dp, getvarxz, getvarxz_dp, getvaryz, getvar1d, getvare3
+  PUBLIC :: getvar3d, getvar3dt, getvar4d, getspval
   PUBLIC :: gettimeseries
   PUBLIC :: closeout, ncopen
   PUBLIC :: ERR_HDL
@@ -1617,6 +1619,200 @@ CONTAINS
 
   END FUNCTION getvar
 
+  FUNCTION  getvar_dp (cdfile,cdvar,klev,kpi,kpj,kimin,kjmin, ktime, ldiom, ld_zeromask)
+    !!---------------------------------------------------------------------
+    !!                  ***  FUNCTION  getvar  ***
+    !!
+    !! ** Purpose : Return the 2D REAL8 variable cvar, from cdfile at level klev.
+    !!              kpi,kpj are the horizontal size of the 2D variable
+    !!
+    !! ** Method  : Initially a quite straigth forward function. But with the
+    !!              NEMO variation about the e3t in partial steps, I try to adapt
+    !!              the code to all existing mesh_zgr format, which reduces the
+    !!              readibility of the code. One my think of specific routine for
+    !!              getvar (e3._ps ...)
+    !!
+    !!---------------------------------------------------------------------
+    CHARACTER(LEN=*),          INTENT(in) :: cdfile       ! file name to work with
+    CHARACTER(LEN=*),          INTENT(in) :: cdvar        ! variable name to work with
+    INTEGER(KIND=4), OPTIONAL, INTENT(in) :: klev         ! Optional variable. If missing 1 is assumed
+    INTEGER(KIND=4),           INTENT(in) :: kpi, kpj     ! horizontal size of the 2D variable
+    INTEGER(KIND=4), OPTIONAL, INTENT(in) :: kimin, kjmin ! Optional variable. If missing 1 is assumed
+    INTEGER(KIND=4), OPTIONAL, INTENT(in) :: ktime        ! Optional variable. If missing 1 is assumed
+    LOGICAL,         OPTIONAL, INTENT(in) :: ldiom        ! Optional variable. If missing false is assumed
+    LOGICAL,         OPTIONAL, INTENT(in) :: ld_zeromask  ! Optional variable. Reset field to zero at missing 
+                                                          ! value points. If missing false is assumed
+    REAL(KIND=8), DIMENSION(kpi,kpj) :: getvar_dp         ! 2D REAL 4 holding variable field at klev
+
+    INTEGER(KIND=4), DIMENSION(4)               :: istart, icount, inldim
+    INTEGER(KIND=4)                             :: incid, id_var, id_dimunlim, inbdim, inbdim2
+    INTEGER(KIND=4)                             :: istatus, ilev, imin, jmin
+    INTEGER(KIND=4)                             :: itime, ilog, ipiglo, imax
+    INTEGER(KIND=4), SAVE                       :: ii, ij, ik0, ji, jj, ik1, ik
+    REAL(KIND=8)                                :: sf=1., ao=0.        !: Scale factor and add_offset
+    REAL(KIND=8)                                :: spval  !: missing value
+    REAL(KIND=8) , DIMENSION (:,:), ALLOCATABLE :: zend, zstart
+    CHARACTER(LEN=256)                          :: clvar
+    LOGICAL                                     :: lliom=.false., llperio=.false., ll_zeromask=.false.
+    LOGICAL                                     :: llog=.FALSE. , lsf=.FALSE. , lao=.FALSE.
+    !!
+    INTEGER(KIND=4)                :: ityp
+    !INTEGER(KIND=4), DIMENSION(:)  :: dimids
+    !INTEGER(KIND=4)                :: nAtts
+    !!---------------------------------------------------------------------
+    llperio=.false.
+    IF (PRESENT(klev) ) THEN
+       ilev=klev
+    ELSE
+       ilev=1
+    ENDIF
+    ! Optionall arguments
+
+    IF (PRESENT(kimin) ) THEN
+       imin=kimin
+
+       ipiglo=getdim(cdfile, cn_x, ldexact=.true.)
+       IF (imin+kpi-1 > ipiglo ) THEN
+         llperio=.true.
+         imax=kpi+1 +imin -ipiglo
+       ENDIF
+    ELSE
+       imin=1
+    ENDIF
+
+    IF (PRESENT(kjmin) ) THEN
+       jmin=kjmin
+    ELSE
+       jmin=1
+    ENDIF
+
+    IF (PRESENT(ktime) ) THEN
+       itime=ktime
+    ELSE
+       itime=1
+    ENDIF
+
+    IF (PRESENT(ldiom) ) THEN
+       lliom=ldiom
+    ELSE
+       lliom=.false.
+    ENDIF
+
+    IF (PRESENT(ld_zeromask) ) THEN
+       ll_zeromask=ld_zeromask
+    ELSE
+       ll_zeromask=.false.
+    ENDIF
+    
+    ! Must reset the flags to false for every call to getvar
+    clvar=cdvar
+    llog = .FALSE.
+    lsf  = .FALSE.
+    lao  = .FALSE.
+
+    CALL ERR_HDL(NF90_OPEN(cdfile,NF90_NOWRITE,incid) )
+
+    IF ( lliom) THEN  !
+      IF ( clvar == cn_ve3t ) THEN
+        SELECT CASE ( cg_zgr_ver )
+        CASE ( 'v2.0' ) ; clvar = 'e3t_ps'
+        CASE ( 'v3.0' ) ; clvar = 'e3t'
+        CASE ( 'v3.6' ) ; clvar = 'e3t_0'
+        END SELECT
+      ELSE IF ( clvar == cn_ve3u ) THEN
+        SELECT CASE ( cg_zgr_ver )
+        CASE ( 'v2.0' ) ; clvar = 'e3u_ps'
+        CASE ( 'v3.0' ) ; clvar = 'e3u'
+        CASE ( 'v3.6' ) ; clvar = 'e3u_0'
+        END SELECT
+      ELSE IF ( clvar == cn_ve3v ) THEN
+        SELECT CASE ( cg_zgr_ver )
+        CASE ( 'v2.0' ) ; clvar = 'e3v_ps'
+        CASE ( 'v3.0' ) ; clvar = 'e3v'
+        CASE ( 'v3.6' ) ; clvar = 'e3v_0'
+        END SELECT
+      ELSE IF ( clvar == cn_ve3w ) THEN
+        SELECT CASE ( cg_zgr_ver )
+        CASE ( 'v2.0' ) ; clvar = 'e3w_ps'
+        CASE ( 'v3.0' ) ; clvar = 'e3w'
+        CASE ( 'v3.6' ) ; clvar = 'e3w_0'
+        END SELECT
+      ENDIF
+    ENDIF
+
+    istatus=NF90_INQUIRE(incid, unlimitedDimId=id_dimunlim)
+    CALL ERR_HDL(NF90_INQ_VARID ( incid,clvar,id_var))
+
+    ! look for time dim in variable
+    inldim=0
+    istatus=NF90_INQUIRE_VARIABLE(incid, id_var, ndims=inbdim,dimids=inldim(:) )
+
+    istart(1) = imin
+    istart(2) = jmin
+    ! JMM ! it workd for X Y Z T file,   not for X Y T .... try to found a fix !
+    IF ( inldim(3) == id_dimunlim ) THEN
+      istart(3) = itime
+      istart(4) = 1
+    ELSE
+      istart(3) = ilev
+      istart(4) = itime
+    ENDIF
+
+    icount(1)=kpi
+    icount(2)=kpj
+    icount(3)=1
+    icount(4)=1
+
+    spval = getspval ( cdfile, cdvar)  ! try many kind of missing_value (eg _FillValue _Fillvalue Fillvalue ...)
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'savelog10')
+    IF (istatus == NF90_NOERR ) THEN
+       ! The file is saved a the log of the field
+       istatus=NF90_GET_ATT(incid,id_var,'savelog10',ilog)
+       IF ( ilog /= 0 ) llog=.TRUE.
+    ENDIF
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'scale_factor')
+    IF (istatus == NF90_NOERR ) THEN
+       ! there is a scale factor for this variable
+       istatus=NF90_GET_ATT(incid,id_var,'scale_factor',sf)
+       IF ( sf /= 1. ) lsf=.TRUE.
+    ENDIF
+
+    istatus=NF90_INQUIRE_ATTRIBUTE(incid,id_var,'add_offset')
+    IF (istatus == NF90_NOERR ) THEN
+       ! there is an add_offset for this variable
+       istatus=NF90_GET_ATT(incid,id_var,'add_offset', ao)
+       IF ( ao /= 0.) lao=.TRUE.
+    ENDIF
+
+
+    IF (llperio ) THEN ! Deal with E-W periodic conditions ( used when reading across the folding line)
+      ALLOCATE (zend (ipiglo-imin,kpj), zstart(imax-1,kpj) )
+       istatus=NF90_GET_VAR(incid,id_var,zend,   start=(/imin,jmin,ilev,itime/),count=(/ipiglo-imin,kpj,1,1/))
+       istatus=NF90_GET_VAR(incid,id_var,zstart, start=(/2   ,jmin,ilev,itime/),count=(/imax-1,     kpj,1,1/))
+       getvar_dp(1:ipiglo-imin    ,:) = zend
+       getvar_dp(ipiglo-imin+1:kpi,:) = zstart
+      DEALLOCATE(zstart, zend )
+    ELSE
+      istatus=NF90_GET_VAR(incid,id_var,getvar_dp, start=istart,count=icount)
+    ENDIF
+
+    IF ( istatus /= 0 ) THEN
+       PRINT *,' Problem in getvar for ', TRIM(clvar)
+       CALL ERR_HDL(istatus)
+       STOP 98
+    ENDIF
+
+    ! Caution : order does matter !
+    IF (lsf )  WHERE (getvar_dp /= spval )  getvar_dp=getvar_dp*sf
+    IF (lao )  WHERE (getvar_dp /= spval )  getvar_dp=getvar_dp + ao
+    IF (llog)  WHERE (getvar_dp /= spval )  getvar_dp=10**getvar_dp
+    IF (ll_zeromask) WHERE (getvar_dp == spval ) getvar_dp=0.0
+
+    istatus=NF90_CLOSE(incid)
+
+  END FUNCTION getvar_dp
 
   FUNCTION  getvar3d (cdfile,cdvar,kpi,kpj,kpz, kimin, kjmin, kkmin, ktime )
     !!---------------------------------------------------------------------
