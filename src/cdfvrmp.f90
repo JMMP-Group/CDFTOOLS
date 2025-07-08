@@ -328,7 +328,7 @@ PROGRAM cdfvrmp
      ! Initisalise output variable
      var_out(:,:,:) = 0.0
      IF ( jt == 1 ) THEN
-        ssrmask(:,:) = getvar(cn_fmsk, cv_msk , 1, npiglo, npjglo)
+        ssrmask(:,:) = getvar(cn_fzgr, cv_msk , 1, npiglo, npjglo)
         IF ( lspwnd ) THEN
            wndmask(:,:) = 0
            wndmask(iimin:iimax,ijmin:ijmax) = 1 
