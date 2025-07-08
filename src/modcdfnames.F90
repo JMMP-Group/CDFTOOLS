@@ -320,6 +320,7 @@ CONTAINS
     READ(inam, nambathy   )
     READ(inam, namsqdvar  )
     READ(inam, nammeshmask  )
+    READ(inam, nammask    )
     CLOSE ( inam ) 
     CALL chkenv
 
