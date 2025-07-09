@@ -46,7 +46,7 @@ PROGRAM cdfvrmp
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: ssrmask, mbk_inp, mbk_out, wndmask, rmp_msk
 
   REAL(KIND=4)                                        :: zspval                  ! missing value
-  REAL(KIND=8)      , PARAMETER                       :: eps = 1.e-15            ! accuracy param
+  REAL(KIND=8)      , PARAMETER                       :: eps = 1.e-14            ! accuracy param
   REAL(KIND=8)                                        :: depinp, depout          ! ocean depth
   REAL(KIND=8)                                        :: depdiff                 ! to check accuracy
   REAL(KIND=8)      , DIMENSION(:)      , ALLOCATABLE :: dtim                    ! time counter
@@ -55,15 +55,6 @@ PROGRAM cdfvrmp
   REAL(KIND=8)      , DIMENSION(:,:)    , ALLOCATABLE :: e3p_inp, e3p_out
   REAL(KIND=8)      , DIMENSION(:,:)    , ALLOCATABLE :: gdepp_inp, gdepp_out
   REAL(KIND=8)      , DIMENSION(:,:,:)  , ALLOCATABLE :: var_out
-  !REAL(KIND=4)                                        :: depinp, depout          ! ocean depth
-  !REAL(KIND=4)                                        :: depdiff                 ! to check accuracy
-  !REAL(KIND=4)      , DIMENSION(:)      , ALLOCATABLE :: dtim                    ! time counter
-  !REAL(KIND=4)      , DIMENSION(:)      , ALLOCATABLE :: ddep                    ! depth variable
-  !REAL(KIND=4)      , DIMENSION(:,:)    , ALLOCATABLE :: var_inp
-  !REAL(KIND=4)      , DIMENSION(:,:)    , ALLOCATABLE :: e3p_inp, e3p_out
-  !REAL(KIND=4)      , DIMENSION(:,:)    , ALLOCATABLE :: gdepp_inp, gdepp_out
-  !REAL(KIND=4)      , DIMENSION(:,:,:)  , ALLOCATABLE :: var_out
-
 
   CHARACTER(LEN=256)                                  :: cf_msh             ! input TARGET_MESH-file
   CHARACTER(LEN=256)                                  :: cf_inp             ! input T U V W files
