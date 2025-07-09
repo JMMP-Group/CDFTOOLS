@@ -45,6 +45,7 @@ PROGRAM cdf_mshmsk_update_e3
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: tmask, umask, vmask, fmask
   INTEGER           ,                       PARAMETER :: dp = SELECTED_REAL_KIND(15,307) ! double precision (real 8)
 
+  REAL(dp)          , PARAMETER                       :: eps = 1.e-14            ! accuracy param
   REAL(dp)          , DIMENSION(:)      , ALLOCATABLE :: dtim                    ! time counter
   REAL(dp)          , DIMENSION(:)      , ALLOCATABLE :: gdept_1d, gdepw_1d      ! depth variable
   REAL(dp)          , DIMENSION(:,:)    , ALLOCATABLE :: hdep_trg, e3_inp, e3_trg
@@ -256,7 +257,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbkt_trg(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbkt_trg(ji,jj) ) ) * tmask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
@@ -356,7 +357,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * umask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
@@ -452,7 +453,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * vmask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) == 0.0d0 ) ) mskup(ji,jj) = 0
+        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
