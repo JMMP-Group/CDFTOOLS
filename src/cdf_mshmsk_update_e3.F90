@@ -24,7 +24,7 @@ PROGRAM cdf_mshmsk_update_e3
 
   INTEGER(KIND=4)                                     :: ierr                    ! working integer
   INTEGER(KIND=4)                                     :: narg, iargc, ijarg      ! command line
-  INTEGER(KIND=4)                                     :: ji, jj, jk, jt          ! dummy loop index
+  INTEGER(KIND=4)                                     :: ji, jj, jk              ! dummy loop index
   INTEGER(KIND=4)                                     :: npiglo, npjglo, npkinp  ! size of the INPUT mesh
   INTEGER(KIND=4)                                     :: npiout, npjout, npkout  ! size of the TARGET mesh
   INTEGER(KIND=4)                                     :: npt                     ! time-records of the INPUT file
@@ -257,7 +257,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbkt_trg(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbkt_trg(ji,jj) ) ) * tmask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
+        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
@@ -279,12 +279,19 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3t @ jk if needed
-     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3t, jk, npiglo, npjglo) 
-     gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk) ! W-level @ jk+1, first guess
-     WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
-        e3(:,:,jk) = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
-        mskup(:,:) = 0
-     END WHERE
+     IF ( jk == npkinp-1 ) THEN
+        WHERE ( mskup(:,:) == 1 )
+           e3(:,:,jk) = hdep_trg(:,:) - zwtmp(:,:)
+           mskup(:,:) = 0
+        END WHERE
+     ELSE
+        e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3t, jk, npiglo, npjglo)
+        gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk) ! W-level @ jk+1, first guess
+        WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
+           e3(:,:,jk) = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
+           mskup(:,:) = 0
+        END WHERE
+     ENDIF 
      ! Compute gdepw, gdept and e3w
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)               ! W-level @ jk+1, correct
      gdept(:,:,jk) = 0.5d0 * ( zwtmp(:,:) +  gdepw(:,:) ) ! T-level @ jk, as mean value
@@ -357,7 +364,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * umask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
+        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
@@ -381,12 +388,19 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3u @ jk if needed
-     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3u, jk, npiglo, npjglo)
-     gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
-     WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
-        e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
-        mskup(:,:) = 0
-     END WHERE
+     IF ( jk == npkinp-1 ) THEN
+        WHERE ( mskup(:,:) == 1 )
+           e3(:,:,jk) = hdep_trg(:,:) - zwtmp(:,:)
+           mskup(:,:) = 0
+        END WHERE
+     ELSE
+        e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3u, jk, npiglo, npjglo)
+        gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
+        WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
+           e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
+           mskup(:,:) = 0
+        END WHERE
+     END IF
      ! Compute gdepw, gdept
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)               ! W-level @ jk+1, correct
      gdept(:,:,jk) = 0.5d0 * ( zwtmp(:,:) +  gdepw(:,:) ) ! T-level @ jk, as mean value
@@ -453,7 +467,7 @@ PROGRAM cdf_mshmsk_update_e3
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * vmask(ji,jj)
         ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (e3_inp(ji,:)-e3_trg(ji,:)) <= eps ) ) mskup(ji,jj) = 0
+        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
      END DO
   END DO
 
@@ -477,12 +491,19 @@ PROGRAM cdf_mshmsk_update_e3
         zttmp(:,:) = 0.0d0
      ENDIF
      ! Update e3v @ jk if needed
-     e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3v, jk, npiglo, npjglo)
-     gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
-     WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
-        e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
-        mskup(:,:)  = 0
-     END WHERE
+     IF ( jk == npkinp-1 ) THEN
+        WHERE ( mskup(:,:) == 1 )
+           e3(:,:,jk) = hdep_trg(:,:) - zwtmp(:,:)
+           mskup(:,:) = 0
+        END WHERE
+     ELSE
+        e3(:,:,jk) = getvar_dp(cf_inp, cn_ve3v, jk, npiglo, npjglo)
+        gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)
+        WHERE ( ( gdepw(:,:) >= hdep_trg(:,:) ) .AND. ( mskup(:,:) == 1 ) )
+           e3(:,:,jk)    = e3(:,:,jk) - (gdepw(:,:) - hdep_trg(:,:))
+           mskup(:,:)  = 0
+        END WHERE
+     END IF
      ! Compute gdepw, gdept
      gdepw(:,:) = zwtmp(:,:) + e3(:,:,jk)               ! W-level @ jk+1, correct
      gdept(:,:,jk) = 0.5d0 * ( zwtmp(:,:) +  gdepw(:,:) ) ! T-level @ jk, as mean value
