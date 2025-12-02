@@ -28,7 +28,7 @@ PROGRAM cdf_mshmsk_update_e3
   INTEGER(KIND=4)                                     :: npiglo, npjglo, npkinp  ! size of the INPUT mesh
   INTEGER(KIND=4)                                     :: npiout, npjout, npkout  ! size of the TARGET mesh
   INTEGER(KIND=4)                                     :: npt                     ! time-records of the INPUT file
-  INTEGER(KIND=4)                                     :: idep, idep_max          ! possible depth index, maximum
+  INTEGER(KIND=4)                                     :: jvar, jvar_max          ! possible var name index, maximum
   INTEGER(KIND=4)                                     :: nczgr                   ! ncid of output file
   INTEGER                                             :: id_dept1d, id_depw1d, id_gdept, id_gdepw
   INTEGER                                             :: id_e3t, id_e3u , id_e3v
@@ -39,7 +39,7 @@ PROGRAM cdf_mshmsk_update_e3
   INTEGER                                             :: id_tmsk, id_umsk, id_vmsk, id_fmsk
   INTEGER                                             :: id_trmp, id_urmp, id_vrmp
  
-  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt_trg, mbkt_inp, mskup
+  INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt_trg, mbkt_inp, mskup, vrmp_msk
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbk_wrki, mbk_wrkt
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: mbkt, mbku, mbkv
   INTEGER(KIND=4)   , DIMENSION(:,:)    , ALLOCATABLE :: tmask, umask, vmask, fmask
@@ -60,13 +60,18 @@ PROGRAM cdf_mshmsk_update_e3
   CHARACTER(LEN=256)                                  :: cv_lev             ! type of vertical coordinates
   CHARACTER(LEN=256)                                  :: cldum              ! can handle a long list of section files
   CHARACTER(LEN=256)                                  :: cf_zgr='zgr.nc'    ! output file name
+  CHARACTER(LEN=256)                                  :: cf_vrmpmsk         ! name of file containing the mask for where
+                                                                            ! we want to carry out vrmp
   CHARACTER(LEN=256)                                  :: cdep, cv_dep       ! deptht name for dim and var
   CHARACTER(LEN=256), DIMENSION(:)      , ALLOCATABLE :: clv_dep            ! array of possible depth name 
                                                                             ! (or 3rd dimension)
+  CHARACTER(LEN=256), DIMENSION(:)      , ALLOCATABLE :: clv_vrmpmsk        ! array of possible vrmp_msk names
 
   TYPE (variable)   , DIMENSION(:)      , ALLOCATABLE :: stypvar            ! Type variable is defined in cdfio.
   LOGICAL                                             :: lchk     = .FALSE. ! flag for missing files
   LOGICAL                                             :: lerror   = .FALSE. ! flag for missing arguments
+  LOGICAL                                             :: lvmsk    = .FALSE. ! flag for file containing the mask 
+                                                                            ! of where e3 will be updated
   ! -------------------------------------------------------------------------------------------------------------
   !
   ! -----------------------
@@ -77,7 +82,8 @@ PROGRAM cdf_mshmsk_update_e3
   ! check argument number and show usage if necessary
   narg = iargc()
   IF ( narg == 0 ) THEN
-     PRINT *,' usage :  cdf_mshmsk_update_e3 -i INP-file -lev COORD -t TRG-file [-o OUT-file] '
+     PRINT *,' usage :  cdf_mshmsk_update_e3 -i INP-file -lev COORD -t TRG-file '
+     PRINT *,'          [-m MSK-file] [-o OUT-file]'
      PRINT *,'      '
      PRINT *,'     PURPOSE :'
      PRINT *,'       This tool updates the vertical scale factors of an INPUT mesh_mask.nc'
@@ -93,6 +99,7 @@ PROGRAM cdf_mshmsk_update_e3
      PRINT *,'       -t TRG-file     :  target mesh_mask.nc file.'
      PRINT *,'      '
      PRINT *,'     OPTIONS :'
+     PRINT *,'       [-m MSK-file ]  :  input file containing the mask of where e3 will be updated'
      PRINT *,'       [-o OUT-file ]  :  output filename instead of ''vrmp_<IN-var>.nc'' '
      PRINT *,'     '
      PRINT *,'     REQUIRED FILES :'
@@ -114,7 +121,8 @@ PROGRAM cdf_mshmsk_update_e3
      CASE ( '-lev'     ) ; CALL getarg(ijarg, cv_lev ) ; ijarg = ijarg + 1
      CASE ( '-t'       ) ; CALL getarg(ijarg, cf_trg ) ; ijarg = ijarg + 1
      ! options
-     CASE ( '-o'       ) ; CALL getarg(ijarg, cf_zgr ) ; ijarg = ijarg + 1 
+     CASE ( '-m'       ) ; CALL getarg(ijarg, cf_vrmpmsk ) ; ijarg = ijarg + 1; lvmsk = .TRUE.
+     CASE ( '-o'       ) ; CALL getarg(ijarg, cf_zgr )     ; ijarg = ijarg + 1 
      CASE DEFAULT        ; PRINT *,' ERROR : ',TRIM(cldum),' : unknown option.' ; STOP 99
      END SELECT
   ENDDO
@@ -139,22 +147,31 @@ PROGRAM cdf_mshmsk_update_e3
   IF (lerror ) STOP 99
 
   ! Checking all the needed file exists
-  lchk = chkfile(cf_inp ) .OR. lchk
-  lchk = chkfile(cf_trg ) .OR. lchk
+  lchk = chkfile(cf_inp) .OR. lchk
+  lchk = chkfile(cf_trg) .OR. lchk
   IF ( lchk ) STOP 99 ! missing file
+
+  IF ( lvmsk ) THEN
+     lchk = chkfile(cf_vrmpmsk) .OR. lchk
+     IF ( lchk ) STOP 99 ! missing file
+  ELSE
+     PRINT *,' WARNING - the points where vrmp will be carried out are automatically computed:'
+     PRINT *,'           in the case the simulation you are analysing uses at least one AGRIF '
+     PRINT *,'           zoom without vrmp, then the automatic computation will not be correct!'
+  END IF
 
   ! Get dimensions of input geometry and file
   npiglo = getdim (cf_inp, cn_x)
   npjglo = getdim (cf_inp, cn_y)
 
   ! looking for npk among various possible name
-  idep_max=4
-  ALLOCATE ( clv_dep(idep_max) )
+  jvar_max=4
+  ALLOCATE ( clv_dep(jvar_max) )
   clv_dep(:) = (/cn_z,'z','nav_lev','levels'/)
-  idep=1  ; ierr=1000
-  DO WHILE ( ierr /= 0 .AND. idep <= idep_max )
-     npkinp  = getdim (cf_inp, clv_dep(idep), cdtrue=cv_dep, kstatus=ierr)
-     idep = idep + 1
+  jvar=1  ; ierr=1000
+  DO WHILE ( ierr /= 0 .AND. jvar <= jvar_max )
+     npkinp  = getdim (cf_inp, clv_dep(jvar), cdtrue=cv_dep, kstatus=ierr)
+     jvar = jvar + 1
   ENDDO
 
   IF ( ierr /= 0 ) THEN  ! none of the dim name was found
@@ -173,10 +190,10 @@ PROGRAM cdf_mshmsk_update_e3
   npjout = getdim(cf_trg, cn_y)
 
   ! looking for npk among various possible name
-  idep=1  ; ierr=1000
-  DO WHILE ( ierr /= 0 .AND. idep <= idep_max )
-     npkout  = getdim (cf_trg, clv_dep(idep), cdtrue=cv_dep, kstatus=ierr)
-     idep = idep + 1
+  jvar=1  ; ierr=1000
+  DO WHILE ( ierr /= 0 .AND. jvar <= jvar_max )
+     npkout  = getdim (cf_trg, clv_dep(jvar), cdtrue=cv_dep, kstatus=ierr)
+     jvar = jvar + 1
   ENDDO
 
   IF ( ierr /= 0 ) THEN  ! none of the dim name was found
@@ -234,17 +251,44 @@ PROGRAM cdf_mshmsk_update_e3
   navlon(:,:)   = getvar  (cf_inp, cn_vlon2d, 1  , npiglo, npjglo)
   navlat(:,:)   = getvar  (cf_inp, cn_vlat2d, 1  , npiglo, npjglo)
 
-  CALL CreateMeshZgrFile
+  ! looking for the vrmp mask among various possible name
+  IF ( lvmsk ) THEN
+     jvar=1
+     jvar_max=2
+     ALLOCATE ( vrmp_msk   ( npiglo, npjglo ) )
+     ALLOCATE ( clv_vrmpmsk(jvar_max) )
+     clv_vrmpmsk(1) = 's2z_msk'
+     clv_vrmpmsk(2) = 'mask_loczgr'
+     DO WHILE ( jvar <= jvar_max )
+        IF ( .NOT. chkvar( cf_vrmpmsk, clv_vrmpmsk(jvar) ) ) THEN       
+           vrmp_msk = getvar(cf_vrmpmsk, clv_vrmpmsk(jvar), 1  , npiglo, npjglo)
+           EXIT
+        ELSE
+           jvar = jvar + 1
+        END IF
+     ENDDO
+     IF ( jvar > jvar_max ) THEN
+        PRINT *, "ERROR: no variable found for vrmp mask in ", cf_vrmpmsk
+        STOP 99
+     END IF
+  ENDIF
 
-  ! Initisalise output variable
-  mskup(:,:) = 1
-  e3(:,:,:)  = 0.0d0
-  gdepw(:,:) = 0.0d0
-  gdept(:,:,:) = 0.0d0
+  CALL CreateMeshZgrFile
 
   ! ----------------------------------------------------------------------------------
   ! T-GRID
   ! ----------------------------------------------------------------------------------
+   
+  ! Initisalise some variables
+  e3(:,:,:)  = 0.0d0
+  gdepw(:,:) = 0.0d0
+  gdept(:,:,:) = 0.0d0
+  IF ( lvmsk) THEN 
+     mskup(:,:) = 0
+     WHERE ( vrmp_msk(:,:) > 0 ) mskup(:,:) = 1
+     vrmp_msk(:,:) = mskup(:,:) ! for computations @ U and V grids
+  ELSE             ; mskup(:,:) = 1
+  END IF
 
   ! Compute the bathymetry of the target mesh_mask @ T-grid
   ! and exclude points where e3 are identical
@@ -256,8 +300,10 @@ PROGRAM cdf_mshmsk_update_e3
         e3_inp(ji,mbkt_inp(ji,jj)+1:npkinp) = 0.0d0
         e3_trg(ji,mbkt_trg(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbkt_trg(ji,jj) ) ) * tmask(ji,jj)
-        ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        IF ( .NOT. lvmsk) THEN
+           ! Exclude points where e3 in the input and output grid are identical
+           IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        END IF
      END DO
   END DO
 
@@ -336,7 +382,9 @@ PROGRAM cdf_mshmsk_update_e3
   ! ----------------------------------------------------------------------------------
  
   e3(:,:,:)     = 0.0d0
-  mskup(:,:)    = 1
+  IF ( lvmsk) THEN ; mskup(:,:) = 0
+  ELSE             ; mskup(:,:) = 1
+  END IF
 
   ! Compute number of wet levels @ U-points
   mbk_wrki(:,:)  = npkinp-1
@@ -363,8 +411,12 @@ PROGRAM cdf_mshmsk_update_e3
         e3_inp(ji,mbk_wrki(ji,jj)+1:npkinp) = 0.0d0
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * umask(ji,jj)
-        ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        IF ( lvmsk) THEN
+           mskup(ji,jj) = vrmp_msk(ji,jj) * vrmp_msk(ji+1,jj)
+        ELSE
+           ! Exclude points where e3 in the input and output grid are identical
+           IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        END IF
      END DO
   END DO
 
@@ -439,7 +491,9 @@ PROGRAM cdf_mshmsk_update_e3
   ! ----------------------------------------------------------------------------------
 
   e3(:,:,:)     = 0.0d0
-  mskup(:,:)    = 1
+  IF ( lvmsk) THEN ; mskup(:,:) = 0
+  ELSE             ; mskup(:,:) = 1
+  END IF
 
   ! Compute number of wet levels @ V-points
   mbk_wrki(:,:)  = npkinp-1
@@ -466,8 +520,12 @@ PROGRAM cdf_mshmsk_update_e3
         e3_inp(ji,mbk_wrki(ji,jj)+1:npkinp) = 0.0d0
         e3_trg(ji,mbk_wrkt(ji,jj)+1:npkout) = 0.0d0
         hdep_trg(ji,jj) = SUM( e3_trg(ji, 1:mbk_wrkt(ji,jj) ) ) * vmask(ji,jj)
-        ! Exclude points where e3 in the input and output grid are identical
-        IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        IF ( lvmsk) THEN
+           mskup(ji,jj) = vrmp_msk(ji,jj) * vrmp_msk(ji,jj+1)
+        ELSE
+           ! Exclude points where e3 in the input and output grid are identical
+           IF ( ALL( (ABS(e3_inp(ji,:)-e3_trg(ji,:))) <= eps ) ) mskup(ji,jj) = 0
+        END IF
      END DO
   END DO
 
