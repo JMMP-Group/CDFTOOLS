@@ -307,6 +307,8 @@ PROGRAM cdfmhst
      dtrps(:,:) = 0.d0
      DO jk = 1,npk
         PRINT *,'level ',jk
+        ! Get land-sea mask for removing nans
+        zmask(:,:) = getvar(cn_fmsk, cn_vmask, jk, npiglo, npjglo)
         ! Get temperature and salinity at jk
         IF ( lsepf ) THEN
            zv(:,:)= getvar(cf_vfil, cn_vomecrty, jk, npiglo, npjglo, ktime=jt)
@@ -325,10 +327,13 @@ PROGRAM cdfmhst
            zvt(:,:)= getvar(cf_vtfil, cn_vomevt, jk, npiglo, npjglo, ktime=jt)
            zvs(:,:)= getvar(cf_vtfil, cn_vomevs, jk, npiglo, npjglo, ktime=jt)
         ENDIF
+        WHERE ( zmask(:,:) == 0 ) zvt(:,:) = 0.
         ! get e3v at level jk
         IF ( lfull ) THEN ; e3v(:,:) = e31d(jk)
         ELSE              ; e3v(:,:) = getvar(cn_fe3v, cn_ve3v, jk, npiglo, npjglo, ktime=it, ldiom=.NOT.lg_vvl )
         ENDIF
+        IF ( lg_vvl ) WHERE ( zmask(:,:) == 0 ) e3v(:,:) = 0.
+
         dwkh(:,:) = zvt(:,:)*e1v(:,:)*e3v(:,:)*1.d0
         dwks(:,:) = zvs(:,:)*e1v(:,:)*e3v(:,:)*1.d0
 
